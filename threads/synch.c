@@ -111,7 +111,7 @@ sema_up (struct semaphore *sema) {
 
 	old_level = intr_disable ();
 	if (!list_empty (&sema->waiters)){
-		thread_unblock (list_entry (list_pop_front (&sema->waiters),
+		thread_unblock (list_entry (list_pop_front(&sema->waiters),
 					struct thread, elem));
 		list_sort(&sema->waiters,less_priority,NULL);
 	}
@@ -197,7 +197,7 @@ lock_acquire (struct lock *lock) {
 		// lock의 주소를 저장한다 (어디에? wait_on_lock)
 		thread_current()->wait_on_lock = lock;
 		// 현재 우선순위를 저장하고 기부받은 스레드를 목록으로 유지한다.
-		lock_donation(lock);
+		thread_donation(list_entry(list_begin(&lock->semaphore.waiters),struct thread, elem));
 	}
 
 	sema_down (&lock->semaphore);
@@ -233,26 +233,28 @@ void
 lock_release (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread (lock));
-	
-	//그 lock -> holder(thread_current())의 donation리스트에서 front thread를 unblock
-	if (!list_empty(&lock->semaphore.waiters)){
-		struct thread *tmp = list_entry(list_front(&lock->semaphore.waiters),struct thread, d_elem);
-		list_remove(&tmp->d_elem);
-		thread_unblock(tmp);
-	}
+	// enum intr_level old_level = intr_disable();
+
 	//sort를 할지말지 고민해보장!
 	// list_sort(&lock->semaphore.waiters,less_priority,NULL);
 	
-	// priority properly!
-	struct thread * a = lock->holder;
-	if(!list_empty(&a->donation)){
-		lock->holder->priority = (lock->holder->priority_origin > 
-				list_entry(list_front(&lock->holder->donation),struct thread, d_elem)->priority)?
-						lock->holder->priority_origin:list_entry(list_front(&lock->holder->donation),struct thread, d_elem)->priority ;
+	//그 lock -> holder(thread_current())의 donation리스트에서 front thread를 unblock
+	if (!list_empty(&lock->semaphore.waiters)){
+		list_remove(&list_entry(list_begin(&lock->semaphore.waiters),struct thread, elem)->d_elem);
+		// priority properly!
+		if(!list_empty(&lock->holder->donation)){
+			lock->holder->priority = (lock->holder->priority_origin > 
+					list_entry(list_begin(&lock->holder->donation),struct thread, d_elem)->priority)?
+							lock->holder->priority_origin : list_entry(list_begin(&lock->holder->donation),struct thread, d_elem)->priority ;
+		}
+		else{
+			lock->holder->priority = lock->holder->priority_origin;
+		}
 	}
-	else{
-		lock->holder->priority = lock->holder->priority_origin;
-	}
+	// 	struct thread *tmp = list_entry(list_front(&lock->semaphore.waiters),struct thread, elem);
+	// 	thread_unblock(tmp);
+	// }
+	// intr_set_level(old_level);
 	lock->holder = NULL;
 	sema_up (&lock->semaphore);
 }
@@ -353,16 +355,4 @@ cond_broadcast (struct condition *cond, struct lock *lock) {
 	while (!list_empty (&cond->waiters))
 		cond_signal (cond, lock);
 }
-void lock_donation(struct lock *lock){
-	struct thread *tmp = thread_current();
-	list_insert_ordered(&lock->holder->donation, &tmp->d_elem, less_priority, NULL);
-	for(tmp = &lock->holder; tmp->wait_on_lock =NULL; &lock->holder){
-		if(tmp->priority<&lock->holder->priority) 
-			break;
-		list_sort(&tmp->donation,less_priority,NULL);
-		tmp->priority = (tmp->priority_origin < 
-			list_entry(list_front(&tmp->donation),
-						struct thread, d_elem)->priority) ?
-						list_entry(list_front(&tmp->donation),struct thread, d_elem)->priority : tmp->priority_origin;
-	}	
-}
+

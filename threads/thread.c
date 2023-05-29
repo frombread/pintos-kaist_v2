@@ -328,10 +328,22 @@ thread_yield (void) {
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) {
-	thread_current ()->priority = new_priority;
+	thread_current ()->priority_origin = new_priority;
 	// enum intr_level old_level=intr_disable();
 	// list_sort(&ready_list,less_priority,NULL);
 	// intr_set_level (old_level);
+	if(!list_empty(&thread_current()->donation)){
+		thread_current()->priority = (thread_current()->priority_origin > 
+				list_entry(list_front(&thread_current()->donation),struct thread, d_elem)->priority)?
+						thread_current()->priority_origin:list_entry(list_front(&thread_current()->donation),struct thread, d_elem)->priority ;
+	}
+	else{
+		thread_current()->priority = thread_current()->priority_origin;
+	}
+
+	if(thread_current()->wait_on_lock!=NULL)
+		thread_donation(thread_current()->wait_on_lock);
+
 	if (new_priority < list_entry(list_begin(&ready_list),struct thread, elem)->priority)
 	thread_yield();
 }
@@ -668,4 +680,30 @@ bool less_priority(const struct list_elem *a, const struct list_elem *b, void *a
 	struct thread* thread_a = list_entry(a,struct thread, elem);
 	struct thread* thread_b = list_entry(b,struct thread, elem);
 	return (int)(thread_a->priority) > (int)(thread_b->priority);
+}
+
+void thread_donation(struct thread* t){
+	// struct thread *tmp = thread_current();
+	// list_insert_ordered(&lock->holder->donation, &tmp->d_elem, less_priority, NULL);
+	// for(tmp = &lock->holder; tmp->wait_on_lock =NULL; tmp = tmp->wait_on_lock->holder){
+	// 	if(tmp->priority<&lock->holder->priority) 
+	// 		break;
+	// 	list_sort(&tmp->donation,less_priority,NULL);
+	// 	tmp->priority = (tmp->priority_origin < 
+	// 		list_entry(list_front(&tmp->donation),
+	// 					struct thread, elem)->priority) ?
+	// 					list_entry(list_front(&tmp->donation),struct thread, elem)->priority : tmp->priority_origin;
+	// }	
+
+	struct thread *tmp;
+	list_insert_ordered(&t->wait_on_lock->holder->donation, &t->d_elem, less_priority, NULL);
+	for(tmp = t; tmp->wait_on_lock =NULL; tmp = tmp->wait_on_lock->holder){
+		if(tmp->priority < tmp->wait_on_lock->holder->priority) 
+			break;
+		list_sort(&tmp->donation,less_priority,NULL);
+		tmp->priority = (tmp->priority_origin < 
+			list_entry(list_front(&tmp->donation),
+						struct thread, d_elem)->priority) ?
+						list_entry(list_front(&tmp->donation),struct thread, d_elem)->priority : tmp->priority_origin;
+	}	
 }
