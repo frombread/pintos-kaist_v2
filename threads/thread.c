@@ -334,7 +334,7 @@ thread_set_priority (int new_priority) {
 	// enum intr_level old_level=intr_disable();
 	// list_sort(&ready_list,less_priority,NULL);
 	// intr_set_level (old_level);
-	if (new_priority < list_entry( list_begin(&ready_list),struct thread, elem)->priority)
+	if (new_priority < list_entry(list_begin(&ready_list),struct thread, elem)->priority)
 	thread_yield();
 }
 
@@ -434,6 +434,10 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
+	t->priority_origin = priority;
+	t->wait_on_lock = NULL;
+	list_init(&(t->donation));
+	// d_elme????
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -625,13 +629,13 @@ void thread_sleep(int64_t ticks){
 		enum intr_level old_level;
 		old_level = intr_disable ();	// interrupt disable
 		current_thread->wakeup_tick = ticks;
-		list_insert_ordered(&sleep_list, &(current_thread->elem),less_wakeuptick,NULL);// sleep list에 삽입
-		
+		list_insert_ordered(&sleep_list, &(current_thread->elem),less_wakeuptick, NULL);// sleep list에 삽입
+
 		thread_save_mintick();
 		thread_block();
 		intr_set_level (old_level);
 	}
-}   
+}
 
 void thread_wakeup(int64_t ticks){
 	struct list_elem *last;
@@ -666,5 +670,5 @@ bool less_wakeuptick(const struct list_elem *a, const struct list_elem *b, void 
 bool less_priority(const struct list_elem *a, const struct list_elem *b, void *aux){
 	struct thread* thread_a = list_entry(a,struct thread, elem);
 	struct thread* thread_b = list_entry(b,struct thread, elem);
-	return (int)(thread_a->priority)	> (int)(thread_b->priority);
+	return (int)(thread_a->priority) > (int)(thread_b->priority);
 }
