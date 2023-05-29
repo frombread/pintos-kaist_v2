@@ -254,8 +254,6 @@ thread_unblock (struct thread *t) {
 	old_level = intr_disable ();
 	ASSERT (t->status == THREAD_BLOCKED);
 	// list_push_back (&ready_list, &t->elem);
-
-
 	/////////////////////////////////////////////////
 	list_insert_ordered(&ready_list, &t->elem,less_priority, NULL);
 	/////////////////////////////////////////////////
@@ -436,8 +434,7 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->magic = THREAD_MAGIC;
 	t->priority_origin = priority;
 	t->wait_on_lock = NULL;
-	list_init(&(t->donation));
-	// d_elme????
+	list_init(&t->donation);
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
