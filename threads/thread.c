@@ -341,8 +341,8 @@ thread_set_priority (int new_priority) {
 		thread_current()->priority = thread_current()->priority_origin;
 	}
 
-	if(thread_current()->wait_on_lock!=NULL)
-		thread_donation(thread_current()->wait_on_lock);
+	// if(thread_current()->wait_on_lock!=NULL)
+	// 	thread_donation(thread_current()->wait_on_lock);
 
 	if (new_priority < list_entry(list_begin(&ready_list),struct thread, elem)->priority)
 	thread_yield();
@@ -682,6 +682,12 @@ bool less_priority(const struct list_elem *a, const struct list_elem *b, void *a
 	return (int)(thread_a->priority) > (int)(thread_b->priority);
 }
 
+bool cmp_delem_priority(const struct list_elem *a, const struct list_elem *b, void *aux){
+	struct thread* thread_a = list_entry(a,struct thread, d_elem);
+	struct thread* thread_b = list_entry(b,struct thread, d_elem);
+	return (int)(thread_a->priority) > (int)(thread_b->priority);
+}
+
 void thread_donation(struct thread* t){
 	// struct thread *tmp = thread_current();
 	// list_insert_ordered(&lock->holder->donation, &tmp->d_elem, less_priority, NULL);
@@ -696,14 +702,30 @@ void thread_donation(struct thread* t){
 	// }	
 
 	struct thread *tmp;
-	list_insert_ordered(&t->wait_on_lock->holder->donation, &t->d_elem, less_priority, NULL);
-	for(tmp = t; tmp->wait_on_lock =NULL; tmp = tmp->wait_on_lock->holder){
-		if(tmp->priority < tmp->wait_on_lock->holder->priority) 
-			break;
-		list_sort(&tmp->donation,less_priority,NULL);
-		tmp->priority = (tmp->priority_origin < 
-			list_entry(list_front(&tmp->donation),
-						struct thread, d_elem)->priority) ?
-						list_entry(list_front(&tmp->donation),struct thread, d_elem)->priority : tmp->priority_origin;
+	list_insert_ordered(&(t->wait_on_lock->holder->donation), &(t->d_elem), cmp_delem_priority, NULL);
+	// list_push_back(&t->wait_on_lock->holder->donation,&t->d_elem);
+	// list_sort(&t->wait_on_lock->holder->donation,cmp_delem_priority,NULL);
+	tmp = t;
+
+	while (1){
+		printf("\n\n@@@@@@@\tpriority of current %d\t@@@@@@@\n\n",tmp->priority );
+		// for(tmp = t; tmp->wait_on_lock !=NULL; tmp = tmp->wait_on_lock->holder){
+		// printf("\n\n@@@@@@@\tpriority of holder %d\t@@@@@@@\n\n",t->wait_on_lock->holder->priority );
+		// while (tmp->wait_on_lock != NULL){
+		if(!list_empty(&tmp->donation)){
+			// if(tmp->priority < tmp->wait_on_lock->holder->priority) 
+			// 	break;
+			list_sort(&tmp->donation,cmp_delem_priority,NULL);
+			// if(!list_empty(&tmp->donation))
+			tmp->priority = (tmp->priority_origin < 
+				list_entry(list_front(&tmp->donation),
+							struct thread, d_elem)->priority) ?
+							list_entry(list_front(&tmp->donation),struct thread, d_elem)->priority : tmp->priority_origin;
+			printf("\n\n@@@@@@@@@@@\t%d %d\t@@@@@@@\n\n",list_entry(list_front(&tmp->donation),struct thread, d_elem)->priority , tmp->priority_origin);
+			// list_sort(&tmp->wait_on_lock->semaphore.waiters,cmp_delem_priority,NULL);
+		}
+		if (tmp->wait_on_lock!=NULL) tmp = tmp->wait_on_lock->holder;
+		else break;
+		printf("\n\n@@@@@@@\tnext %d\t@@@@@@@\n\n",tmp->priority );
 	}	
 }

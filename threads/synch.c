@@ -67,7 +67,7 @@ sema_down (struct semaphore *sema) {
 	old_level = intr_disable ();
 	while (sema->value == 0) {
 		// list_push_back (&sema->waiters, &thread_current ()->elem);
-		list_insert_ordered(&sema->waiters, &thread_current()->elem, less_priority, NULL);
+		list_insert_ordered(&(sema->waiters), &(thread_current()->elem), less_priority, NULL);
 		thread_block ();
 	}
 	sema->value--;
@@ -111,12 +111,14 @@ sema_up (struct semaphore *sema) {
 
 	old_level = intr_disable ();
 	if (!list_empty (&sema->waiters)){
+		list_sort(&sema->waiters,less_priority,NULL);
+		printf("\n\n@@@@@@@@@@@@@whichone goes: %d\n\n",list_entry (list_front(&sema->waiters),
+					struct thread, elem)->priority_origin);
 		thread_unblock (list_entry (list_pop_front(&sema->waiters),
 					struct thread, elem));
-		list_sort(&sema->waiters,less_priority,NULL);
 	}
 	sema->value++;
-	thread_yield();
+	// thread_yield();
 	intr_set_level (old_level);
 }
 
@@ -197,11 +199,33 @@ lock_acquire (struct lock *lock) {
 		// lock의 주소를 저장한다 (어디에? wait_on_lock)
 		thread_current()->wait_on_lock = lock;
 		// 현재 우선순위를 저장하고 기부받은 스레드를 목록으로 유지한다.
-		thread_donation(list_entry(list_begin(&lock->semaphore.waiters),struct thread, elem));
+		// list_insert_ordered(&lock->semaphore.waiters, &thread_current()->elem, less_priority, NULL);
+		// thread_donation(list_entry(list_front(&lock->semaphore.waiters),struct thread, elem));
+		if (list_empty(&lock->semaphore.waiters)){
+			printf("@@@@@@@@@@ no waiters\n\n");
+			thread_donation(thread_current());
+		}
+		else{
+			struct thread*tmp; 
+			if (thread_current()->priority > list_entry(list_front(&lock->semaphore.waiters),struct thread, elem)->priority){
+				list_remove(&list_entry(list_front(&lock->semaphore.waiters),struct thread, elem)->d_elem);
+				printf("\n\n########remove#######\n\n");
+				tmp=thread_current();
+			}
+			else{
+				tmp=list_entry(list_front(&lock->semaphore.waiters),struct thread, elem);
+			}
+			printf("\n\n########donation#######\n\n");
+			thread_donation(tmp);
+			printf("\n\n########3333333333#######\n\n");
+		}
+		sema_down (&lock->semaphore);
+	}
+	else{
+		lock->holder = thread_current();
+		sema_down (&lock->semaphore);
 	}
 
-	sema_down (&lock->semaphore);
-	lock->holder = thread_current ();
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -240,12 +264,12 @@ lock_release (struct lock *lock) {
 	
 	//그 lock -> holder(thread_current())의 donation리스트에서 front thread를 unblock
 	if (!list_empty(&lock->semaphore.waiters)){
-		list_remove(&list_entry(list_begin(&lock->semaphore.waiters),struct thread, elem)->d_elem);
+		// list_remove(&list_entry(list_front(&lock->semaphore.waiters),struct thread, elem)->d_elem);
 		// priority properly!
 		if(!list_empty(&lock->holder->donation)){
 			lock->holder->priority = (lock->holder->priority_origin > 
-					list_entry(list_begin(&lock->holder->donation),struct thread, d_elem)->priority)?
-							lock->holder->priority_origin : list_entry(list_begin(&lock->holder->donation),struct thread, d_elem)->priority ;
+					list_entry(list_front(&lock->holder->donation),struct thread, d_elem)->priority)?
+							lock->holder->priority_origin : list_entry(list_front(&lock->holder->donation),struct thread, d_elem)->priority ;
 		}
 		else{
 			lock->holder->priority = lock->holder->priority_origin;
