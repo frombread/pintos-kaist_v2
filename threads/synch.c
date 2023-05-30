@@ -155,7 +155,7 @@ sema_test_helper (void *sema_) {
 		sema_up (&sema[1]);
 	}
 }
-
+
 /* Initializes LOCK.  A lock can be held by at most a single
    thread at any given time.  Our locks are not "recursive", that
    is, it is an error for the thread currently holding a lock to
@@ -198,22 +198,22 @@ lock_acquire (struct lock *lock) {
       // list_insert_ordered(&lock->semaphore.waiters,&thread_current()->elem,less_priority,NULL);
       list_push_back(&lock->holder->donation,&thread_current()->d_elem);
       // sema_down (&lock->semaphore);
-
+      donate_priority();
       struct list_elem* tmp_delem;
-      int max_priority = lock->holder->priority_origin;
-      for (tmp_delem = lock->holder->donation.head.next; tmp_delem!=&(lock->holder->donation).tail; tmp_delem=list_next(tmp_delem)){
-         struct thread *thread_ptr = list_entry(tmp_delem, struct thread, d_elem);
-         // printf("\n\n\n@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n\n\n");
-         if(max_priority < thread_ptr->priority){
-            max_priority = thread_ptr->priority;
-         }
-      }
-      lock->holder->priority = max_priority;
+      
+      // int max_priority = lock->holder->priority_origin;
+      // for (tmp_delem = lock->holder->donation.head.next; tmp_delem!=&(lock->holder->donation).tail; tmp_delem=list_next(tmp_delem)){
+      //    struct thread *thread_ptr = list_entry(tmp_delem, struct thread, d_elem);
+      //    if(max_priority < thread_ptr->priority){
+      //       max_priority = thread_ptr->priority;
+      //    }
+      // }
+      // lock->holder->priority = max_priority;
    }
-   // else{
+
       sema_down (&lock->semaphore);
 	   lock->holder = thread_current();
-   // }
+
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -245,7 +245,9 @@ void
 lock_release (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread (lock));
+
    int max_priority = lock->holder->priority_origin;
+
    struct list_elem* tmp_delem;
    for (tmp_delem = lock->holder->donation.head.next; tmp_delem!=&(lock->holder->donation).tail;){//확인 필요! Tail쪽
       struct thread *thread_ptr = list_entry(tmp_delem, struct thread , d_elem);
@@ -259,6 +261,7 @@ lock_release (struct lock *lock) {
         }
       }
       lock->holder->priority =max_priority;
+
    } 
 	sema_up (&lock->semaphore);
 	lock->holder = NULL;
@@ -358,4 +361,23 @@ cond_broadcast (struct condition *cond, struct lock *lock) {
 
 	while (!list_empty (&cond->waiters))
 		cond_signal (cond, lock);
+}
+
+void donate_priority(void){
+   struct thread *tmp;
+   for(tmp = thread_current();(tmp->wait_on_lock !=NULL) &&
+                           (tmp->wait_on_lock->holder->priority < tmp->priority); tmp = tmp->wait_on_lock->holder)
+   {
+      struct list_elem* tmp_delem;
+      int max_priority = tmp->wait_on_lock->holder->priority_origin;
+      for (tmp_delem = tmp->wait_on_lock->holder->donation.head.next; 
+                           tmp_delem!=&(tmp->wait_on_lock->holder->donation).tail; tmp_delem=list_next(tmp_delem)){
+         struct thread *thread_ptr = list_entry(tmp_delem, struct thread, d_elem);
+         if(max_priority < thread_ptr->priority)
+         {
+            max_priority = thread_ptr->priority;
+         }
+      }
+      tmp->wait_on_lock->holder->priority = max_priority;
+   }
 }
