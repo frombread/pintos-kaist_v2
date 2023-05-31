@@ -341,8 +341,6 @@ thread_set_priority (int new_priority) {
 	// enum intr_level old_level=intr_disable();
 	// list_sort(&ready_list,less_priority,NULL);
 	// intr_set_level (old_level);
-	// 왜 되다가 안될까
-	// 여기까지 안옴 @@@@@@ 
 	if (new_priority < list_entry( list_begin(&ready_list),struct thread, elem)->priority)
 		thread_yield();
 }
